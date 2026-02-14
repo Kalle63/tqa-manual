@@ -53,14 +53,18 @@ def _render_scorecard_header(doc_score: DocumentScore):
         total_errors = sum(doc_score.error_type_counts.values())
         st.metric(FI["total_errors"], total_errors)
 
-    # Hyvaksytty/hylatty -tiedot
+    # Hyvaksytty/hylatty -tiedot (käytä käyttäjän asetuksia)
+    settings = st.session_state.get("scoring_settings", {})
+    pf_thresh = settings.get("pass_fail_threshold", 40)
+    crit_max = settings.get("critical_error_max", 1)
+
     es_pf = FI["pass"] if doc_score.error_score_pass_fail == "Pass" else FI["fail"]
     cc_pf = FI["pass"] if doc_score.critical_count_pass_fail == "Pass" else FI["fail"]
     st.markdown(
         f"**{FI['error_score']}:** {es_pf} "
-        f"({FI['error_score_threshold']}) &nbsp;&nbsp;|&nbsp;&nbsp; "
+        f"(raja-arvo: ≤ {pf_thresh}) &nbsp;&nbsp;|&nbsp;&nbsp; "
         f"**{FI['critical_count']}:** {doc_score.critical_error_count} "
-        f"({cc_pf}, {FI['critical_max']})"
+        f"({cc_pf}, max: {crit_max})"
     )
 
     # Laatuarvosanan kuvaus

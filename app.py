@@ -79,7 +79,8 @@ def _recalculate_scores(segments, assessments):
         )
         seg_scores.append(seg_score)
 
-    doc_score = score_document(seg_scores)
+    settings = st.session_state.get("scoring_settings")
+    doc_score = score_document(seg_scores, settings=settings)
     st.session_state["segment_scores"] = seg_scores
     st.session_state["document_score"] = doc_score
 

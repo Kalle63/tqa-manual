@@ -57,7 +57,7 @@ def _generate_export_csv(segments, assessments, seg_scores, doc_score) -> str:
             "Selitys",
             "Pisteet",
             "Segmentin sanamäärä",
-            "Segmentin rangaistuspisteet",
+            "Segmentin virhepistesumma",
             "Yleiskommentti",
         ]
     )
@@ -118,7 +118,7 @@ def _generate_export_csv(segments, assessments, seg_scores, doc_score) -> str:
 
         writer.writerow(["Segmenttejä yhteensä", doc_score.total_segments])
         writer.writerow(["Sanamäärä yhteensä", doc_score.total_word_count])
-        writer.writerow(["Rangaistuspisteet yhteensä", doc_score.total_penalty])
+        writer.writerow(["Virhepistesumma", doc_score.total_penalty])
         writer.writerow([])
         writer.writerow(["Virhepisteet / 1000 sanaa", f"{doc_score.error_score:.2f}"])
         writer.writerow(["Virhepisteiden raja-arvo", "≤ 40"])
@@ -137,7 +137,7 @@ def _generate_export_csv(segments, assessments, seg_scores, doc_score) -> str:
         # Virheet tyypeittäin
         writer.writerow([])
         writer.writerow(["VIRHEET TYYPEITTÄIN"])
-        writer.writerow(["Virhetyyppi", "Lukumäärä", "Rangaistuspisteet"])
+        writer.writerow(["Virhetyyppi", "Lukumäärä", "Virhepistesumma"])
         for et, count in doc_score.error_type_counts.items():
             fi_name = FI["error_type_names"].get(et, et)
             penalty = doc_score.error_type_penalties.get(et, 0)

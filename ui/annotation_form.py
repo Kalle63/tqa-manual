@@ -69,18 +69,39 @@ def render_annotation_panel(
 
 
 def _render_existing_annotations(seg_idx: int, assessment: SegmentAssessment):
-    """Näytä nykyiset virheet poistopainikkeilla."""
+    """Näytä nykyiset virheet muokkaus- ja poistopainikkeilla."""
     if not assessment.annotations:
         st.success(FI["no_errors"])
         return
 
+    # Käännostaulukot
+    fi_to_en_type = {
+        FI["error_type_names"].get(et, et): et for et in ERROR_TYPES
+    }
+    fi_to_en_sev = {
+        FI["severity_names"].get(s, s): s for s in SEVERITY_LEVELS
+    }
+    fi_error_labels = list(fi_to_en_type.keys())
+    fi_severity_labels = list(fi_to_en_sev.keys())
+
+    # Tarkista, onko muokkauslomake auki jollekin virheelle
+    editing_key = f"_editing_{seg_idx}"
+    editing_idx = st.session_state.get(editing_key)
+
     st.markdown(f"**{FI['errors_found']}:**")
     for j, ann in enumerate(assessment.annotations):
+
+        # Jos tämä virhe on muokkaustilassa, näytä lomake
+        if editing_idx == j:
+            _render_edit_form(seg_idx, j, ann, fi_to_en_type, fi_to_en_sev,
+                              fi_error_labels, fi_severity_labels)
+            continue
+
         color = SEVERITY_COLORS_DISPLAY.get(ann.severity, "gray")
         fi_type = FI["error_type_names"].get(ann.error_type, ann.error_type)
         fi_sev = FI["severity_names"].get(ann.severity, ann.severity)
 
-        cols = st.columns([2, 2, 1, 2, 0.5])
+        cols = st.columns([2, 2, 1, 2, 0.5, 0.5])
         with cols[0]:
             st.markdown(f"**{fi_type}**")
         with cols[1]:
@@ -90,9 +111,81 @@ def _render_existing_annotations(seg_idx: int, assessment: SegmentAssessment):
         with cols[3]:
             st.caption(ann.explanation)
         with cols[4]:
+            if st.button(FI["edit"], key=f"edit_{seg_idx}_{j}"):
+                st.session_state[editing_key] = j
+                st.rerun()
+        with cols[5]:
             if st.button(FI["delete"], key=f"del_{seg_idx}_{j}"):
+                # Jos muokataan poistettavaa tai sitä myöhempää, nollaa muokkaustila
+                if editing_idx is not None and editing_idx >= j:
+                    st.session_state.pop(editing_key, None)
                 st.session_state["assessments"][seg_idx].annotations.pop(j)
                 st.rerun()
+
+
+def _render_edit_form(seg_idx, ann_idx, ann, fi_to_en_type, fi_to_en_sev,
+                      fi_error_labels, fi_severity_labels):
+    """Muokkauslomake yksittäiselle virheelle."""
+    editing_key = f"_editing_{seg_idx}"
+
+    st.markdown("---")
+
+    # Virhetyyppi — valitaan nykyinen arvo oletukseksi
+    current_fi_type = FI["error_type_names"].get(ann.error_type, ann.error_type)
+    type_index = fi_error_labels.index(current_fi_type) if current_fi_type in fi_error_labels else 0
+    selected_fi_type = st.selectbox(
+        FI["error_type"],
+        fi_error_labels,
+        index=type_index,
+        key=f"edit_type_{seg_idx}_{ann_idx}",
+    )
+    new_error_type = fi_to_en_type[selected_fi_type]
+
+    # Vakavuus
+    current_fi_sev = FI["severity_names"].get(ann.severity, ann.severity)
+    sev_index = fi_severity_labels.index(current_fi_sev) if current_fi_sev in fi_severity_labels else 0
+    selected_fi_sev = st.selectbox(
+        FI["severity"],
+        fi_severity_labels,
+        index=sev_index,
+        key=f"edit_sev_{seg_idx}_{ann_idx}",
+    )
+    new_severity = fi_to_en_sev[selected_fi_sev]
+
+    # Virhejakso
+    new_span = st.text_input(
+        FI["error_span"],
+        value=ann.span,
+        key=f"edit_span_{seg_idx}_{ann_idx}",
+    )
+
+    # Selitys
+    new_explanation = st.text_input(
+        FI["explanation"],
+        value=ann.explanation,
+        key=f"edit_expl_{seg_idx}_{ann_idx}",
+    )
+
+    col_save, col_cancel = st.columns(2)
+    with col_save:
+        if st.button(FI["save_edit"], key=f"save_edit_{seg_idx}_{ann_idx}", type="primary"):
+            if new_span and new_explanation:
+                st.session_state["assessments"][seg_idx].annotations[ann_idx] = ErrorAnnotation(
+                    error_type=new_error_type,
+                    severity=new_severity,
+                    span=new_span,
+                    explanation=new_explanation,
+                )
+                st.session_state.pop(editing_key, None)
+                st.rerun()
+            else:
+                st.warning(FI["fill_required"])
+    with col_cancel:
+        if st.button(FI["cancel_edit"], key=f"cancel_edit_{seg_idx}_{ann_idx}"):
+            st.session_state.pop(editing_key, None)
+            st.rerun()
+
+    st.markdown("---")
 
 
 def _render_add_form(seg_idx: int):

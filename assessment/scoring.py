@@ -48,25 +48,58 @@ def score_segment(
     )
 
 
-def get_quality_rating(error_score: float) -> tuple[int, str]:
+def get_quality_rating(
+    error_score: float,
+    thresholds: list[tuple[float, int, str]] | None = None,
+) -> tuple[int, str]:
     """
     Determine quality rating (1-5) from error score (per 1000 words).
 
     Returns (rating, description).
+    If thresholds is provided, uses those instead of the defaults.
     """
-    for threshold, rating, description in QUALITY_RATING_THRESHOLDS:
+    rating_table = thresholds if thresholds is not None else QUALITY_RATING_THRESHOLDS
+    for threshold, rating, description in rating_table:
         if error_score <= threshold:
             return rating, description
     return 1, "Very serious deficiencies"
 
 
-def score_document(segment_scores: list[SegmentScore]) -> DocumentScore:
+def score_document(
+    segment_scores: list[SegmentScore],
+    settings: dict | None = None,
+) -> DocumentScore:
     """
     Calculate the overall document score.
 
     Error Score = (Total Penalty Points / Word Count) * 1000
-    Pass/Fail: Error Score <= 40 AND critical errors <= 1
+    Pass/Fail: Error Score <= threshold AND critical errors <= max
+
+    If settings is provided, uses custom thresholds:
+        settings = {
+            "rating_thresholds": [5, 15, 25, 40],
+            "pass_fail_threshold": 40,
+            "critical_error_max": 1,
+        }
     """
+    # Resolve thresholds
+    pf_threshold = ERROR_SCORE_THRESHOLD
+    crit_max = CRITICAL_ERROR_MAX
+    custom_rating_thresholds = None
+
+    if settings:
+        pf_threshold = settings.get("pass_fail_threshold", ERROR_SCORE_THRESHOLD)
+        crit_max = settings.get("critical_error_max", CRITICAL_ERROR_MAX)
+        rt = settings.get("rating_thresholds")
+        if rt and len(rt) == 4:
+            descriptions = [d for _, _, d in QUALITY_RATING_THRESHOLDS]
+            custom_rating_thresholds = [
+                (rt[0], 5, descriptions[0]),
+                (rt[1], 4, descriptions[1]),
+                (rt[2], 3, descriptions[2]),
+                (rt[3], 2, descriptions[3]),
+            ]
+
     total_word_count = sum(s.word_count for s in segment_scores)
     total_penalty = sum(s.total_penalty for s in segment_scores)
 
@@ -83,12 +116,14 @@ def score_document(segment_scores: list[SegmentScore]) -> DocumentScore:
                 critical_error_count += 1
 
     # Pass/Fail
-    error_score_pass = error_score <= ERROR_SCORE_THRESHOLD
-    critical_count_pass = critical_error_count <= CRITICAL_ERROR_MAX
+    error_score_pass = error_score <= pf_threshold
+    critical_count_pass = critical_error_count <= crit_max
     overall_pass = error_score_pass and critical_count_pass
 
     # Quality rating
-    quality_rating, rating_description = get_quality_rating(error_score)
+    quality_rating, rating_description = get_quality_rating(
+        error_score, custom_rating_thresholds
+    )
 
     # Error type counts
     error_type_counts: dict[str, int] = {}
